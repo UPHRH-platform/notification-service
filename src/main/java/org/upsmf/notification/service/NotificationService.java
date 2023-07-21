@@ -20,7 +20,7 @@ public class NotificationService {
         try {
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(getClass()
-                            .getResourceAsStream("/service-account.json")))
+                            .getResourceAsStream("pass json file here")))
                     .build();
             FirebaseApp.initializeApp(options);
         } catch (Exception e) {
@@ -32,7 +32,7 @@ public class NotificationService {
         Message message = Message.builder()
                 .putData("title", request.getTitle())
                 .putData("body", request.getBody())
-                .setToken("52e7e3c021ec147e5b86cb07e935ffbf")
+                .setToken(request.getDeviceToken())
                 .build();
         // Send the message and return a Mono representing the result
         return Mono.create(callback -> {
