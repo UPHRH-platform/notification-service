@@ -1,32 +1,35 @@
 package org.upsmf.notification.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.upsmf.notification.entity.NotificationRequest;
+import org.springframework.web.bind.annotation.*;
+import org.upsmf.notification.model.NotificationRequest;
+import org.upsmf.notification.model.NotificationResponse;
+import org.upsmf.notification.model.ResponseDto;
+import org.upsmf.notification.model.SearchRequest;
 import org.upsmf.notification.service.NotificationService;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/notifications")
+@RequestMapping("/notification")
 public class NotificationController {
 
     @Autowired
     private NotificationService notificationService;
 
-    @PostMapping("/send-notification")
-    private Mono<String> sendNotification(@RequestBody NotificationRequest request){
+    /**
+     * API to send out Push Notification using FCM
+     *
+     * @param request
+     * @return
+     */
+    @PostMapping("/send")
+    public Mono<ResponseDto> sendNotification(@RequestBody NotificationRequest request){
        return notificationService.sendNotification(request);
     }
 
-  /*  @PostMapping("/send-to-all")
-    public Flux<String> sendNotificationToAll(@RequestBody NotificationRequest request) {
-        return notificationService.sendNotificationToAll(request);
-    }*/
-
-
-
+    @PostMapping("/all")
+    public Flux<NotificationResponse> getNotificationByPage(@RequestBody SearchRequest searchRequest) {
+        return notificationService.search(searchRequest);
+    }
 }
