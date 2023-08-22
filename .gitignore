@@ -22,3 +22,14 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+/mvnw
+/mvnw.cmd
+/.idea/modules.xml
+/.idea/misc.xml
+/.idea/sonarlint/securityhotspotstore/index.pb
+/.idea/sonarlint/issuestore/index.pb
+/.idea/codeStyles/codeStyleConfig.xml
+/HELP.md
+/.idea/codeStyles/Project.xml
+/.idea/vcs.xml
+/.idea/.gitignore
