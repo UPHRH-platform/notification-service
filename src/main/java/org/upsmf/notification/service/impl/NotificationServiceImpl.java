@@ -14,6 +14,7 @@ import org.elasticsearch.index.query.MatchQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -224,8 +225,8 @@ public class NotificationServiceImpl implements NotificationService {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
                 .query(createTicketSearchQuery(searchRequest))
                 .from(searchRequest.getPage())
-                .size(searchRequest.getSize());
-                //.sort(keyValue, SortOrder.valueOf(searchRequest.getSort().get(searchRequest.getSort().keySet().iterator().next()).toUpperCase()));
+                .size(searchRequest.getSize())
+                .sort(keyValue, SortOrder.valueOf(searchRequest.getSort().get(searchRequest.getSort().keySet().iterator().next()).toUpperCase()));
 
         org.elasticsearch.action.search.SearchRequest search = new org.elasticsearch.action.search.SearchRequest("affiliation-push-notifications");
         search.searchType(SearchType.QUERY_THEN_FETCH);
