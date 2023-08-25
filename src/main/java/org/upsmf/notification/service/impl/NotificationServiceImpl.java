@@ -85,24 +85,46 @@ public class NotificationServiceImpl implements NotificationService {
      */
     @Override
     public Mono<ResponseDto> sendNotification(NotificationRequest request) {
+        // validate request
+        validateNotificationPayload(request);
         // Create a new Firebase Cloud Messaging (FCM) message
-        Message message = Message.builder()
-                .putData("title", request.getTitle())
-                .putData("body", request.getBody())
-                .setToken(request.getDeviceToken())
-                .build();
-        // Send the message and return a Mono representing the result
-        return Mono.create(callback -> {
-            try {
-                String response = FirebaseMessaging.getInstance().send(message);
-                saveNotificationInES(request, response);
-                callback.success(new ResponseDto(HttpStatus.OK.value(), HttpStatus.OK.name()));
-            } catch (FirebaseMessagingException e) {
-                callback.error(e);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+        for(String token : request.getDeviceToken()) {
+            Message message = Message.builder()
+                    .putData("title", request.getTitle())
+                    .putData("body", request.getBody())
+                    .setToken(token)
+                    .build();
+            // Send the message and return a Mono representing the result
+            Mono.create(callback -> {
+                try {
+                    String response = FirebaseMessaging.getInstance().send(message);
+                    saveNotificationInES(request, token, response);
+                } catch (FirebaseMessagingException e) {
+                    callback.error(e);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+        return Mono.just(new ResponseDto(HttpStatus.OK.value(), HttpStatus.OK.name()));
+    }
+
+    private void validateNotificationPayload(NotificationRequest request) {
+        if(request == null) {
+            throw new RuntimeException("Invalid Request");
+        }
+        if(request.getUserId() == null || request.getUserId().isBlank()) {
+            throw new RuntimeException("Invalid User ID");
+        }
+        if(request.getTitle() == null || request.getTitle().isBlank()) {
+            throw new RuntimeException("Invalid Message Title");
+        }
+        if(request.getBody() == null || request.getBody().isBlank()) {
+            throw new RuntimeException("Invalid Message Body");
+        }
+        if(request.getDeviceToken() == null || request.getDeviceToken().isEmpty()) {
+            throw new RuntimeException("Invalid Tokens");
+        }
     }
 
     /**
@@ -111,7 +133,7 @@ public class NotificationServiceImpl implements NotificationService {
      * @param response
      * @throws Exception
      */
-    private void saveNotificationInES(NotificationRequest request, String response) throws Exception {
+    private void saveNotificationInES(NotificationRequest request, String token, String response) throws Exception {
         if(response != null && !response.isBlank()){
             String requestId = response.substring(response.lastIndexOf("/")+1);
             Timestamp currentTimestamp = new Timestamp(DateUtil.getCurrentDate().getTime());
@@ -120,7 +142,7 @@ public class NotificationServiceImpl implements NotificationService {
                     .read(false)
                     .text(request.getBody())
                     .title(request.getTitle())
-                    .deviceToken(request.getDeviceToken())
+                    .deviceToken(token)
                     .requestId(requestId)
                     .userId(request.getUserId())
                     .createdDate(currentTimestamp.toLocalDateTime().format(dateTimeFormatter))

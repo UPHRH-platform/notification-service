@@ -2,6 +2,8 @@ package org.upsmf.notification.model;
 
 import lombok.*;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -11,6 +13,6 @@ public class NotificationRequest {
 
     private String title;
     private String body;
-    private String deviceToken;
+    private List<String> deviceToken;
     private String userId;
 }
