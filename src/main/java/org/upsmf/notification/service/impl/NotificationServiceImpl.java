@@ -6,6 +6,7 @@ import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
+import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.RequestOptions;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class NotificationServiceImpl implements NotificationService {
 
     @Value("${fcm.service.account.file.path}")
@@ -94,17 +96,15 @@ public class NotificationServiceImpl implements NotificationService {
                     .putData("body", request.getBody())
                     .setToken(token)
                     .build();
-            // Send the message and return a Mono representing the result
-            Mono.create(callback -> {
-                try {
-                    String response = FirebaseMessaging.getInstance().send(message);
-                    saveNotificationInES(request, token, response);
-                } catch (FirebaseMessagingException e) {
-                    callback.error(e);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
+
+            try {
+                String response = FirebaseMessaging.getInstance().send(message);
+                saveNotificationInES(request, token, response);
+            } catch (FirebaseMessagingException e) {
+                log.error("Error in sending push", e);
+            } catch (Exception e) {
+                log.error("Error in push", e);
+            }
         }
         return Mono.just(new ResponseDto(HttpStatus.OK.value(), HttpStatus.OK.name()));
     }
