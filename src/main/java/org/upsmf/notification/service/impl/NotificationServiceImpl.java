@@ -65,8 +65,7 @@ public class NotificationServiceImpl implements NotificationService {
         // Initialize FirebaseApp with Firebase Admin SDK configuration
         FileInputStream fileInputStream = null;
         try {
-            URL fcmFile = getClass().getClassLoader().getResource(fcmServiceAccountPath);
-            fileInputStream = new FileInputStream(new File(fcmFile.toURI()));
+            fileInputStream = new FileInputStream(new File(fcmServiceAccountPath));
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(fileInputStream))
                     .build();
