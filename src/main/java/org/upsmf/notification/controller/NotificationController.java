@@ -1,11 +1,9 @@
 package org.upsmf.notification.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.upsmf.notification.model.NotificationRequest;
-import org.upsmf.notification.model.NotificationResponse;
-import org.upsmf.notification.model.ResponseDto;
-import org.upsmf.notification.model.SearchRequest;
+import org.upsmf.notification.model.*;
 import org.upsmf.notification.service.NotificationService;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -31,5 +29,10 @@ public class NotificationController {
     @PostMapping("/all")
     public Flux<NotificationResponse> getNotificationByPage(@RequestBody SearchRequest searchRequest) {
         return notificationService.search(searchRequest);
+    }
+
+    @PostMapping("/update")
+    public Mono<ResponseEntity> updateNotificationReadStatus(@RequestBody UpdateNotificationRequest updateNotificationRequest) {
+        return notificationService.updateNotificationReadStatus(updateNotificationRequest);
     }
 }

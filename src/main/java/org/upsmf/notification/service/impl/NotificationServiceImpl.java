@@ -1,5 +1,7 @@
 package org.upsmf.notification.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -7,8 +9,13 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.action.bulk.BulkItemResponse;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.MatchQueryBuilder;
@@ -19,13 +26,11 @@ import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.upsmf.notification.config.EsConfig;
 import org.upsmf.notification.entity.PushNotification;
-import org.upsmf.notification.model.NotificationRequest;
-import org.upsmf.notification.model.NotificationResponse;
-import org.upsmf.notification.model.ResponseDto;
-import org.upsmf.notification.model.SearchRequest;
+import org.upsmf.notification.model.*;
 import org.upsmf.notification.repository.NotificationRepository;
 import org.upsmf.notification.service.NotificationService;
 import org.upsmf.notification.util.DateUtil;
@@ -36,13 +41,9 @@ import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.net.URL;
 import java.sql.Timestamp;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -56,6 +57,12 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private ObjectMapper mapper;
+
+    @Value("${es.push.index.name}")
+    private String pushIndexName;
 
     @PostConstruct
     public void init() throws IOException {
@@ -173,6 +180,59 @@ public class NotificationServiceImpl implements NotificationService {
         return Flux.just(response);
     }
 
+    @Override
+    public Mono<ResponseEntity> updateNotificationReadStatus(UpdateNotificationRequest updateNotificationRequest) {
+        //validate request
+        if(updateNotificationRequest == null) {
+            return Mono.just(ResponseEntity.badRequest().body("Invalid Request."));
+        }
+        if(updateNotificationRequest.getUserId() == null || updateNotificationRequest.getUserId().isBlank()) {
+            return Mono.just(ResponseEntity.badRequest().body("Invalid User ID."));
+        }
+        if(updateNotificationRequest.getStatus() == null) {
+            return Mono.just(ResponseEntity.badRequest().body("Invalid value for status."));
+        }
+        if(updateNotificationRequest.getNotificationIds() == null
+                || updateNotificationRequest.getNotificationIds().isEmpty()) {
+            // mark all
+            List<PushNotification> allByUserId = notificationRepository.findAllByUserId(updateNotificationRequest.getUserId());
+            if(allByUserId != null && !allByUserId.isEmpty()) {
+                allByUserId.stream().forEach(x -> x.setRead(updateNotificationRequest.getStatus()));
+                updateNotificationRecords(allByUserId);
+            }
+        } else {
+            updateNotificationRequest.getNotificationIds().stream()
+                .forEach(x -> {
+                    try {
+                        updatePushStatus(x, updateNotificationRequest.getStatus());
+                    } catch (JsonProcessingException e) {
+                        log.error("Error in updating record", e);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            /*SearchResponse searchResponse = null;
+            BoolQueryBuilder query = createTicketByIdSearchQuery(updateNotificationRequest);
+            if(query == null) {
+                return Mono.just(ResponseEntity.internalServerError().body("Error in processing request"));
+            }
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+                    .query(query);
+
+            org.elasticsearch.action.search.SearchRequest search = new org.elasticsearch.action.search.SearchRequest("affiliation-push-notifications");
+            search.searchType(SearchType.QUERY_THEN_FETCH);
+            search.source(searchSourceBuilder);
+            try {
+                searchResponse = esConfig.elasticsearchClient().search(search, RequestOptions.DEFAULT);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(searchResponse);*/
+            //updateNotificationRecords(notifications);
+        }
+        return Mono.just(ResponseEntity.ok("Success"));
+    }
+
     /**
      *
      * @param searchResponse
@@ -275,5 +335,70 @@ public class NotificationServiceImpl implements NotificationService {
             finalQuery.must(ccSearchQuery);
         }
         return finalQuery;
+    }
+
+    private void updatePushStatus(String id, Boolean status) throws Exception {
+        Optional<PushNotification> pushById = notificationRepository.findById(id);
+        if(pushById.isPresent()) {
+            PushNotification pushNotification = pushById.get();
+            pushNotification.setRead(status);
+            String pushStr = mapper.writeValueAsString(pushNotification);
+            UpdateRequest updateRequest = new UpdateRequest();
+            updateRequest.id(pushNotification.getId()).index(pushIndexName).type("doc")
+                    .doc("read",true,"updatedDateTS", new Timestamp(DateUtil.getCurrentDate().getTime()).getTime());
+            UpdateResponse updateResponse = null;
+            try {
+                updateResponse = esConfig.elasticsearchClient().update(updateRequest, RequestOptions.DEFAULT);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(updateResponse);
+        }
+    }
+
+    private void updateNotificationRecords(List<PushNotification> notifications) {
+        // validation
+        if(notifications == null || notifications.isEmpty()) {
+            return;
+        }
+        // bulk update
+        BulkRequest bulkRequest = new BulkRequest();
+        // Specify the index, type, and document ID for each update operation
+        String type = "doc";
+        // create update request
+        notifications.stream().forEach(x -> {
+            try {
+               String strData = mapper.writeValueAsString(x);
+               UpdateRequest updateRequest = new UpdateRequest(pushIndexName, x.getId());
+               updateRequest.type(type);
+               updateRequest.doc("read",true,"updatedDateTS", new Timestamp(DateUtil.getCurrentDate().getTime()).getTime());
+               bulkRequest.add(updateRequest);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        try {
+            // Perform the bulk update operation
+            BulkResponse bulkResponse = esConfig.elasticsearchClient().bulk(bulkRequest, RequestOptions.DEFAULT);
+
+            // Check the response for the results of the bulk update
+            if (bulkResponse.hasFailures()) {
+                // Handle failures
+                System.out.println("Bulk update has failures:");
+                for (BulkItemResponse bulkItemResponse : bulkResponse) {
+                    if (bulkItemResponse.isFailed()) {
+                        BulkItemResponse.Failure failure = bulkItemResponse.getFailure();
+                        System.out.println("Failure ID: " + bulkItemResponse.getId());
+                        System.out.println(failure.getMessage());
+                    }
+                }
+            } else {
+                System.out.println("Bulk update completed successfully.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
