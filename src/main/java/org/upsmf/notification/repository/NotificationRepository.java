@@ -11,5 +11,5 @@ import java.util.List;
 public interface NotificationRepository extends ElasticsearchRepository<PushNotification, String> {
 
     @Query("{\"bool\":{\"must\":[{\"match\":{\"user_id\":\"?0\"}}]}}")
-    List<PushNotification> findAllByUserId(String userId);
+    Iterable<PushNotification> findAllByUserId(String userId);
 }

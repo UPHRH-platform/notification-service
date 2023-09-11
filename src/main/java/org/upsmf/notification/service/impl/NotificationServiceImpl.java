@@ -193,12 +193,10 @@ public class NotificationServiceImpl implements NotificationService {
         }
         if(updateNotificationRequest.getNotificationIds() == null
                 || updateNotificationRequest.getNotificationIds().isEmpty()) {
+            return Mono.just(ResponseEntity.badRequest().body("Notification IDs Missing"));
             // mark all
-            List<PushNotification> allByUserId = notificationRepository.findAllByUserId(updateNotificationRequest.getUserId());
-            if(allByUserId != null && !allByUserId.isEmpty()) {
-                allByUserId.stream().forEach(x -> x.setRead(updateNotificationRequest.getStatus()));
-                updateNotificationRecords(allByUserId);
-            }
+            //Iterable<PushNotification> allByUserId = notificationRepository.findAllByUserId(updateNotificationRequest.getUserId());
+            //updateNotificationRecords(allByUserId);
         } else {
             updateNotificationRequest.getNotificationIds().stream()
                 .forEach(x -> {
@@ -329,49 +327,29 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
-    private void updateNotificationRecords(List<PushNotification> notifications) {
+    private void updateNotificationRecords(Iterable<PushNotification> notifications) {
         // validation
-        if(notifications == null || notifications.isEmpty()) {
+        if(notifications == null) {
             return;
         }
-        // bulk update
-        BulkRequest bulkRequest = new BulkRequest();
-        // Specify the index, type, and document ID for each update operation
-        String type = "doc";
-        // create update request
-        notifications.stream().forEach(x -> {
-            try {
-               String strData = mapper.writeValueAsString(x);
-               UpdateRequest updateRequest = new UpdateRequest(pushIndexName, x.getId());
-               updateRequest.type(type);
-               updateRequest.doc("read",true,"updatedDateTS", new Timestamp(DateUtil.getCurrentDate().getTime()).getTime());
-               bulkRequest.add(updateRequest);
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException(e);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
-        try {
-            // Perform the bulk update operation
-            BulkResponse bulkResponse = esConfig.elasticsearchClient().bulk(bulkRequest, RequestOptions.DEFAULT);
-
-            // Check the response for the results of the bulk update
-            if (bulkResponse.hasFailures()) {
-                // Handle failures
-                System.out.println("Bulk update has failures:");
-                for (BulkItemResponse bulkItemResponse : bulkResponse) {
-                    if (bulkItemResponse.isFailed()) {
-                        BulkItemResponse.Failure failure = bulkItemResponse.getFailure();
-                        System.out.println("Failure ID: " + bulkItemResponse.getId());
-                        System.out.println(failure.getMessage());
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                // update records
+                notifications.iterator().forEachRemaining(pushNotification -> {
+                    try {
+                        pushNotification.setUpdatedDateTS(new Timestamp(DateUtil.getCurrentDate().getTime()).getTime());
+                        notificationRepository.save(pushNotification);
+                    } catch (JsonProcessingException e) {
+                        log.error("error in updating record ", e);
+                    } catch (Exception e) {
+                        log.error("error in updating record ", e);
                     }
-                }
-            } else {
-                System.out.println("Bulk update completed successfully.");
+                });
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        };
+
+        Thread thread = new Thread(runnable);
+        thread.start();
     }
 }
