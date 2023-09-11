@@ -15,7 +15,6 @@ import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.action.update.UpdateRequest;
-import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.MatchQueryBuilder;
@@ -211,24 +210,6 @@ public class NotificationServiceImpl implements NotificationService {
                         throw new RuntimeException(e);
                     }
                 });
-            /*SearchResponse searchResponse = null;
-            BoolQueryBuilder query = createTicketByIdSearchQuery(updateNotificationRequest);
-            if(query == null) {
-                return Mono.just(ResponseEntity.internalServerError().body("Error in processing request"));
-            }
-            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-                    .query(query);
-
-            org.elasticsearch.action.search.SearchRequest search = new org.elasticsearch.action.search.SearchRequest("affiliation-push-notifications");
-            search.searchType(SearchType.QUERY_THEN_FETCH);
-            search.source(searchSourceBuilder);
-            try {
-                searchResponse = esConfig.elasticsearchClient().search(search, RequestOptions.DEFAULT);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            System.out.println(searchResponse);*/
-            //updateNotificationRecords(notifications);
         }
         return Mono.just(ResponseEntity.ok("Success"));
     }
@@ -342,17 +323,9 @@ public class NotificationServiceImpl implements NotificationService {
         if(pushById.isPresent()) {
             PushNotification pushNotification = pushById.get();
             pushNotification.setRead(status);
-            String pushStr = mapper.writeValueAsString(pushNotification);
-            UpdateRequest updateRequest = new UpdateRequest();
-            updateRequest.id(pushNotification.getId()).index(pushIndexName).type("doc")
-                    .doc("read",true,"updatedDateTS", new Timestamp(DateUtil.getCurrentDate().getTime()).getTime());
-            UpdateResponse updateResponse = null;
-            try {
-                updateResponse = esConfig.elasticsearchClient().update(updateRequest, RequestOptions.DEFAULT);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            System.out.println(updateResponse);
+            pushNotification.setUpdatedDateTS(new Timestamp(DateUtil.getCurrentDate().getTime()).getTime());
+            pushNotification = notificationRepository.save(pushNotification);
+            log.debug("updated notification - {}", pushNotification);
         }
     }
 
