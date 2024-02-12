@@ -23,7 +23,7 @@ pipeline {
             steps {
                 script {
 		    def dockerTag = "${IMAGE_TAG}-${env.BUILD_NUMBER}"	
-		    def dockerImage = docker.build("${GCR_REGISTRY}/${IMAGE_NAME}:${dockerTag}")	
+		    def dockerImage = docker.build("${GCR_REGISTRY}/${IMAGE_NAME}:${dockerTag}", "-f ./Dockerfile ." )	
                 }
             }
         }
